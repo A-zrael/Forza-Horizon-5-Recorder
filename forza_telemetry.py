@@ -9,7 +9,7 @@ UDP_IP = "0.0.0.0"  # listen on all interfaces
 UDP_PORT = 5030  # PS5 Dash telemetry port
 
 # CSV setup
-CSV_FILE = "forza_dash.csv"
+CSV_FILE = input("Enter Race Title: ") + ".csv"
 write_header = True
 
 
@@ -62,18 +62,41 @@ csv_file = open(CSV_FILE, mode="w", newline="")
 csv_writer = None
 prev_data = []
 
+RaceRunning = True
+FirstPacketRecv = False
 
-while True:
+while RaceRunning:
     data, addr = sock.recvfrom(1024)  # buffer size
     packet = parse_dash_packet(data)
-    if packet:
-        # Print JSON
-        print(prev_data[-1])
+    if packet["isRaceOn"]:
+        FirstPacketRecv = True
         # Write CSV
+        prev_data.append(packet)
         if write_header:
             csv_writer = csv.DictWriter(csv_file, fieldnames=packet.keys())
             csv_writer.writeheader()
             write_header = False
-        prev_data.append(packet)
         csv_writer.writerow(packet)
         csv_file.flush()
+        print("\n" * 100)
+        print(str(int(prev_data[-1]["speed_mph"])) + " mph")
+        print("Gear: " + str(int(prev_data[-1]["gear"])))
+        print("Engine RPM: " + str(int(prev_data[-1]["engine_rpm"])))
+        print("Engine Max RPM: " + str(int(prev_data[-1]["engine_max_rpm"])))
+        print(
+            "Percent Max RPM: "
+            + str(
+                (
+                    int(prev_data[-1]["engine_rpm"])
+                    / int(prev_data[-1]["engine_max_rpm"])
+                )
+                * 100
+            )
+        )
+    else:
+        if FirstPacketRecv:
+            RaceRunning = False
+            print("End Of Race")
+            print("\nFinal Speed: " + str(int(prev_data[-1]["speed_mph"])))
+        else:
+            pass
