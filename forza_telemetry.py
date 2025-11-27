@@ -72,16 +72,6 @@ def waitrace(CSV_FILE, UDP_IP, UDP_PORT):
                 csv_writer.writerow(packet)
                 csv_file.flush()
 
-                print("\n" * 100)
-                print(f"{int(packet['speed_mph'])} mph")
-                print(f"Gear: {int(packet['gear'])}")
-                print(f"Engine RPM: {int(packet['engine_rpm'])}")
-                print(f"Engine Max RPM: {int(packet['engine_max_rpm'])}")
-                print(
-                    "Percent Max RPM:",
-                    (packet["engine_rpm"] / packet["engine_max_rpm"]) * 100,
-                )
-
             else:
                 if FirstPacketRecv:
                     RaceRunning = False
