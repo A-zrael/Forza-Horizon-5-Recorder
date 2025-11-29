@@ -10,7 +10,7 @@
 
 <body>
   <header>
-    <h1>Telemetry Player – Lapped / Sprint</h1>
+    <h1>Forza Horizon 5 - Race Analysis</h1>
     <div class="topbar-row">
       <div class="topbar-left">
         <button id="toggleSetupBtn" class="small">Show setup ▾</button>
@@ -37,9 +37,11 @@
     </div>
 
     <div class="controls">
-      <label><input type="checkbox" id="showSectors" checked> Show sector tables</label>
       <label><input type="checkbox" id="showTrackSectors" checked> Show track sectors</label>
-      <label><input type="checkbox" id="showDeltas" checked> Show deltas</label <label>Sectors:
+      <label><input type="checkbox" id="heatToggle" checked> Track speed heatmap</label>
+      <label><input type="checkbox" id="showSectors" checked> Show sector tables</label>
+      <label><input type="checkbox" id="showDeltas" checked> Show deltas</label>
+      <label>Sectors:
       <select id="sectorCount">
         <option value="2">2</option>
         <option value="3">3</option>
@@ -54,6 +56,11 @@
           <option value="bestSector" selected>Best Sector</option>
         </select>
       </label>
+    </div>
+
+    <div class="controls">
+      <button id="cardsMiniBtn" class="small">Cards: Full</button>
+      <button id="playbackMiniBtn" class="small">Bottom: Full</button>
     </div>
 
     <div class="controls" id="eventControls">
@@ -79,7 +86,9 @@
     </div>
   </div>
 
-  <div id="legend"></div>
+  <div class="legendRow">
+    <div id="legend"></div>
+  </div>
 
   <div id="info">
     If no JSON is loaded, the master is built from telemetry.
@@ -92,6 +101,7 @@
         <button id="playBtn">▶ Play</button>
         <button id="pauseBtn">⏸ Pause</button>
         <div class="scrubContainer">
+          <button id="playbackCollapseBtn" class="small" title="Toggle bottom panel">▾</button>
           <span style="font-size:11px;color:var(--text-soft);">Time:</span>
           <input type="range" id="scrubber" min="0" max="0" value="0" />
         </div>

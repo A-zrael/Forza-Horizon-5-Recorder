@@ -24,6 +24,7 @@ export function drawMasterTrack({
   raceType,
   sectorCount,
   showTrackSectorsEl,
+  heatToggle,
   minX,
   maxX,
   minY,
@@ -75,27 +76,42 @@ export function drawMasterTrack({
   }
 
   // Speed heatmap polyline
-  for (let i = 1; i < n; i++) {
-    const a = toCanvas(masterTrack[i - 1].x, masterTrack[i - 1].y);
-    const b = toCanvas(masterTrack[i].x, masterTrack[i].y);
-    let color = "#9097A0";
+  const drawHeat = heatToggle ? heatToggle.checked : true;
+  if (drawHeat) {
+    for (let i = 1; i < n; i++) {
+      const a = toCanvas(masterTrack[i - 1].x, masterTrack[i - 1].y);
+      const b = toCanvas(masterTrack[i].x, masterTrack[i].y);
+      let color = "#9097A0";
 
-    const v = masterTrack[i].heatSpeed;
-    if (v != null && window.__heatRange) {
-      let norm = (v - window.__heatMin) / window.__heatRange;
-      norm = Math.max(0, Math.min(1, norm));
-      color = speedToColor(norm);
+      const v = masterTrack[i].heatSpeed;
+      if (v != null && window.__heatRange) {
+        let norm = (v - window.__heatMin) / window.__heatRange;
+        norm = Math.max(0, Math.min(1, norm));
+        color = speedToColor(norm);
+      }
+
+      trackCtx.beginPath();
+      trackCtx.moveTo(a.x, a.y);
+      trackCtx.lineTo(b.x, b.y);
+      trackCtx.strokeStyle = color;
+      trackCtx.lineWidth = 3;
+      trackCtx.globalAlpha = 0.95;
+      trackCtx.stroke();
     }
-
+    trackCtx.globalAlpha = 1.0;
+  } else {
+    // fallback plain track
+    trackCtx.strokeStyle = "#9097A0";
+    trackCtx.lineWidth = 2.5;
     trackCtx.beginPath();
-    trackCtx.moveTo(a.x, a.y);
-    trackCtx.lineTo(b.x, b.y);
-    trackCtx.strokeStyle = color;
-    trackCtx.lineWidth = 3;
-    trackCtx.globalAlpha = 0.95;
+    for (let i = 1; i < n; i++) {
+      const a = toCanvas(masterTrack[i - 1].x, masterTrack[i - 1].y);
+      const b = toCanvas(masterTrack[i].x, masterTrack[i].y);
+      if (i === 1) trackCtx.moveTo(a.x, a.y);
+      trackCtx.lineTo(b.x, b.y);
+    }
     trackCtx.stroke();
   }
-  trackCtx.globalAlpha = 1.0;
 
   // Start / end markers
   const start = toCanvas(masterTrack[0].x, masterTrack[0].y);
@@ -130,6 +146,7 @@ export function drawMasterTrack({
   // Magnifier lens overlay
   if (lens?.active) {
     const zoom = 2.0;
+    const headingAt = (idx) => computeHeading(masterTrack, idx, (p) => worldToCanvas(trackCanvas, bounds, p.x, p.y));
 
     // Clean the lens area first so unzoomed track does not bleed through
     trackCtx.save();
@@ -184,6 +201,8 @@ export function drawMasterTrack({
       const idx = Math.max(0, Math.min(n - 1, car.index));
       const p = masterTrack[idx];
       const pos = toCanvas(p.x, p.y);
+      let heading = headingAt(idx);
+      if (!Number.isFinite(heading)) heading = 0;
 
       const dx = pos.x - lens.smoothX;
       const dy = pos.y - lens.smoothY;
@@ -191,16 +210,7 @@ export function drawMasterTrack({
       const zx = lens.smoothX + dx * zoom;
       const zy = lens.smoothY + dy * zoom;
 
-      trackCtx.beginPath();
-      trackCtx.arc(zx, zy, 6, 0, Math.PI * 2);
-      trackCtx.fillStyle = car.color;
-      trackCtx.fill();
-
-      trackCtx.beginPath();
-      trackCtx.arc(zx, zy, 7, 0, Math.PI * 2);
-      trackCtx.strokeStyle = "rgba(255,255,255,0.9)";
-      trackCtx.lineWidth = 1;
-      trackCtx.stroke();
+      drawCarIcon(trackCtx, zx, zy, heading, car.color, 1.1);
     });
 
     trackCtx.restore(); // restore clip
@@ -220,10 +230,13 @@ export function drawMasterTrack({
  * Draw car trails and dots on the master track.
  */
 export function drawCars({trackCtx, masterTrack, cars, lens, worldToCanvas}) {
+  const headingAt = idx => computeHeading(masterTrack, idx, p => worldToCanvas(p.x, p.y));
   cars.forEach(car => {
     const idx = Math.max(0, Math.min(masterTrack.length - 1, car.index));
     const p = masterTrack[idx] || masterTrack[0] || {x: 0, y: 0};
     const c = worldToCanvas(p.x, p.y);
+    let heading = headingAt(idx);
+    if (!Number.isFinite(heading)) heading = 0;
 
     // Skip if inside the lens – zoom overlay draws it
     if (lens?.active) {
@@ -250,14 +263,8 @@ export function drawCars({trackCtx, masterTrack, cars, lens, worldToCanvas}) {
     trackCtx.stroke();
     trackCtx.shadowBlur = 0;
 
-    // Main car dot
-    trackCtx.beginPath();
-    trackCtx.arc(c.x, c.y, 7, 0, Math.PI * 2);
-    trackCtx.fillStyle = car.color;
-    trackCtx.shadowColor = car.color;
-    trackCtx.shadowBlur = 12;
-    trackCtx.fill();
-    trackCtx.shadowBlur = 0;
+    // Main car icon
+    drawCarIcon(trackCtx, c.x, c.y, heading, car.color, 1.0);
   });
 }
 
@@ -316,4 +323,69 @@ export function attachLensHandlers(trackCanvas, lensState) {
     trackCanvas.removeEventListener("mousemove", onMove);
     trackCanvas.removeEventListener("mouseleave", onLeave);
   };
+}
+
+function computeHeading(track, idx, toCanvasPoint) {
+  const n = track.length;
+  if (!n) return 0;
+  const i0 = Math.max(0, idx - 1);
+  const i1 = Math.min(n - 1, idx + 1);
+  const a = toCanvasPoint(track[i0]);
+  const b = toCanvasPoint(track[i1]);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return 0;
+  return Math.atan2(dy, dx);
+}
+
+function drawCarIcon(ctx, x, y, heading, color, scale = 1) {
+  const W = 22 * scale;
+  const H = 14 * scale;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // Body (simple racer silhouette)
+  ctx.beginPath();
+  ctx.moveTo(-W * 0.45, -H * 0.55);
+  ctx.lineTo(W * 0.15, -H * 0.55);
+  ctx.lineTo(W * 0.55, 0);
+  ctx.lineTo(W * 0.15, H * 0.55);
+  ctx.lineTo(-W * 0.45, H * 0.55);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 5 * scale;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Outline
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.stroke();
+
+  // Windshield highlight
+  ctx.beginPath();
+  ctx.moveTo(W * 0.0, -H * 0.3);
+  ctx.lineTo(W * 0.32, 0);
+  ctx.lineTo(W * 0.0, H * 0.3);
+  ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Wheels
+  const wheelY = H * 0.7;
+  const wheelR = 3 * scale;
+  ctx.fillStyle = "rgba(20,20,20,0.8)";
+  ["front", "rear"].forEach((_, i) => {
+    const y = i === 0 ? -wheelY : wheelY;
+    ctx.beginPath();
+    ctx.ellipse(-W * 0.2, y, wheelR, wheelR * 0.9, 0, 0, Math.PI * 2);
+    ctx.ellipse(W * 0.2, y, wheelR, wheelR * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
 }

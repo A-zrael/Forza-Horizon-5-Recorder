@@ -101,6 +101,8 @@ import {createLayoutManager} from "./layout.js";
     const scrubber = document.getElementById("scrubber");
     const dashContainer = document.getElementById("dashContainer");
     const legend = document.getElementById("legend");
+    const cardsMiniBtn = document.getElementById("cardsMiniBtn");
+    const playbackMiniBtn = document.getElementById("playbackMiniBtn");
     const trackCanvas = document.getElementById("track");
     const trackCtx = trackCanvas.getContext("2d");
     const raceTypeInfo = document.getElementById("raceTypeInfo");
@@ -109,6 +111,7 @@ import {createLayoutManager} from "./layout.js";
     const showDeltasEl = document.getElementById("showDeltas");
     const sectorCountEl = document.getElementById("sectorCount");
     const deltaModeEl = document.getElementById("deltaMode");
+    const heatToggle = document.getElementById("heatToggle");
     const eventCanvas = document.getElementById("eventTimeline");
     const eventCtx = eventCanvas.getContext("2d");
     const deltaCanvas = document.getElementById("deltaTimeline");
@@ -128,6 +131,7 @@ import {createLayoutManager} from "./layout.js";
     const setupPanel = document.getElementById("setupPanel");
     const dashColumn = document.getElementById("dashColumn");
     const playbackBar = document.getElementById("playbackBar");
+    const playbackCollapseBtn = document.getElementById("playbackCollapseBtn");
 
     const timelineUnifiedBtn = document.getElementById("timelineUnified");
     const timelinePerCarBtn = document.getElementById("timelinePerCar");
@@ -191,13 +195,29 @@ import {createLayoutManager} from "./layout.js";
       setTimeout(resizeLayout, 260);
     });
 
-    miniModeBtn.addEventListener("click", () => {
-      miniMode = !miniMode;
-      miniModeBtn.textContent = "Mini mode: " + (miniMode ? "ON" : "OFF");
-      document.querySelectorAll(".dash").forEach(card => {
-        card.classList.toggle("mini", miniMode);
+    if (miniModeBtn) {
+      miniModeBtn.style.display = "none";
+    }
+
+    if (cardsMiniBtn) {
+      cardsMiniBtn.addEventListener("click", () => {
+        miniMode = !miniMode;
+        cardsMiniBtn.textContent = miniMode ? "Cards: Mini" : "Cards: Full";
+        document.body.classList.toggle("cards-mini", miniMode);
+        document.querySelectorAll(".dash").forEach(card => {
+          card.classList.toggle("mini", miniMode);
+        });
       });
-    });
+    }
+
+    if (playbackMiniBtn) {
+      playbackMiniBtn.addEventListener("click", () => {
+        const isMini = document.body.classList.toggle("bottom-mini");
+        playbackMiniBtn.textContent = isMini ? "Bottom: Mini" : "Bottom: Full";
+        resizeLayout();
+        drawMasterTrack();
+      });
+    }
 
     if (primaryCarSelect) {
       primaryCarSelect.addEventListener("change", () => {
@@ -211,6 +231,12 @@ import {createLayoutManager} from "./layout.js";
     if (deltaShadingToggle) {
       deltaShadingToggle.addEventListener("change", () => {
         drawDeltaTimeline();
+      });
+    }
+    if (heatToggle) {
+      heatToggle.addEventListener("change", () => {
+        drawMasterTrack();
+        drawEventTimeline();
       });
     }
     if (inputThrottleToggle) {
@@ -349,13 +375,17 @@ import {createLayoutManager} from "./layout.js";
     }
 
     showSectorsEl.addEventListener("change", () => updateDashboards());
-    showTrackSectorsEl.addEventListener("change", () => drawCars());
+    showTrackSectorsEl.addEventListener("change", () => {drawMasterTrack();});
     showDeltasEl.addEventListener("change", () => updateDashboards());
     sectorCountEl.addEventListener("change", () => {
       sectorCount = parseInt(sectorCountEl.value, 10) || 4;
       updateDashboards();
+      drawMasterTrack();
     });
-    deltaModeEl.addEventListener("change", () => updateDashboards());
+    deltaModeEl.addEventListener("change", () => {
+      updateDashboards();
+      drawDeltaTimeline();
+    });
 
     timelineUnifiedBtn.onclick = () => {
       timelineMode = 'unified';
@@ -369,6 +399,13 @@ import {createLayoutManager} from "./layout.js";
     [showCrashEl, showCollisionEl, showOvertakeEl, showFastLapEl, showLapStartEl].forEach(el => {
       el.addEventListener("change", () => drawEventTimeline());
     });
+
+    [showTrackSectorsEl, showSectorsEl].forEach(el => {
+      if (el) el.addEventListener("change", () => {drawMasterTrack();});
+    });
+    if (sectorCountEl) {
+      sectorCountEl.addEventListener("change", () => {sectorCount = parseInt(sectorCountEl.value, 10) || 4; drawMasterTrack();});
+    }
 
     loadBtn.onclick = () => {
       if (!csvInput.files.length) return alert("Choose CSV files first");
@@ -735,6 +772,20 @@ import {createLayoutManager} from "./layout.js";
 
     attachLensHandlers(trackCanvas, lensState);
 
+    if (playbackCollapseBtn) {
+      playbackCollapseBtn.addEventListener("click", () => {
+        const isCollapsed = document.body.classList.toggle("bottom-collapsed");
+        playbackCollapseBtn.textContent = isCollapsed ? "▴" : "▾";
+        const inner = document.getElementById("playbackInner");
+        if (inner) {
+          inner.classList.add("collapsing");
+          setTimeout(() => inner.classList.remove("collapsing"), 260);
+        }
+        resizeLayout();
+        drawMasterTrack();
+      });
+    }
+
     function updateCarTrackIndex(car) {
       const d = car.data;
       if (!d.length || !masterTrack.length) {car.index = 0; return;}
@@ -972,6 +1023,7 @@ import {createLayoutManager} from "./layout.js";
         raceType,
         sectorCount,
         showTrackSectorsEl,
+        heatToggle,
         minX,
         maxX,
         minY,
@@ -980,6 +1032,7 @@ import {createLayoutManager} from "./layout.js";
         cars,
         speedToColor
       });
+      drawCars();
     }
 
     function drawCars() {
@@ -1315,17 +1368,6 @@ import {createLayoutManager} from "./layout.js";
     window.__debug = {cars, masterTrack};
 
     
-    if (miniModeBtn) {
-      miniModeBtn.addEventListener("click", () => {
-        const isMini = document.body.classList.toggle("mini-mode");
-        miniModeBtn.textContent = isMini ? "Mini mode: ON" : "Mini mode: OFF";
-        resizeLayout();
-        drawDeltaTimeline();
-        drawInputTimeline();
-        drawEventTimeline();
-      });
-    }
-
 window.addEventListener("load", () => {
       autoDetectRaceTypeFromMaster();
       resizeLayout();

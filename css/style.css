@@ -380,11 +380,22 @@
       display: none;
     }
 
+    .legendRow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-right {
+      display: none;
+    }
+
     #legend {
       display: flex;
       justify-content: flex-start;
       gap: 10px;
-      margin-top: 8px;
       flex-wrap: wrap;
       font-size: 12px;
       color: var(--text-soft);
@@ -426,6 +437,49 @@
       max-width: 1200px;
       margin: 0 auto;
       padding: 0 18px;
+      transition: transform 0.25s ease, height 0.25s ease, opacity 0.25s ease, max-height 0.25s ease;
+    }
+
+    body.bottom-mini #playbackInner {
+      transform: scale(0.85);
+      transform-origin: top center;
+    }
+
+    body.bottom-mini #playbackBar {
+      padding: 2px 0 4px 0;
+    }
+
+    body.bottom-mini #eventTimeline {
+      height: 40px !important;
+    }
+    body.bottom-mini #deltaTimeline {
+      height: 55px !important;
+    }
+    body.bottom-mini #inputTimeline {
+      height: 40px !important;
+    }
+
+    /* Collapsed bottom bar */
+    body.bottom-collapsed #playbackInner {
+      max-height: 54px;
+      overflow: hidden;
+    }
+    body.bottom-collapsed #playbackBar {
+      padding: 0;
+    }
+    body.bottom-collapsed #playbackInner.collapsing {
+      transition: max-height 0.25s ease, transform 0.25s ease, opacity 0.25s ease;
+    }
+    body.bottom-collapsed #eventTimeline,
+    body.bottom-collapsed #deltaTimeline,
+    body.bottom-collapsed #inputTimeline {
+      height: 0 !important;
+      margin-top: 0;
+      opacity: 0;
+    }
+    body.bottom-collapsed #deltaPanel,
+    body.bottom-collapsed #inputPanel {
+      display: none;
     }
 
     .playbackControlsRow {
@@ -446,6 +500,12 @@
       gap: 6px;
     }
 
+    #playbackCollapseBtn.small {
+      min-width: 26px;
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+
     #scrubber {
       width: 100%;
     }
@@ -463,6 +523,8 @@
       box-shadow: 0 5px 18px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(0, 0, 0, 0.8);
       width: 100%;
       display: block;
+      height: 60px;
+      max-height: 80px;
     }
 
     #deltaPanel {
@@ -476,6 +538,8 @@
       box-shadow: 0 5px 18px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(0, 0, 0, 0.8);
       width: 100%;
       display: block;
+      height: 80px;
+      max-height: 100px;
     }
     #inputPanel {
       margin-top: 4px;
@@ -487,6 +551,8 @@
       box-shadow: 0 5px 18px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(0, 0, 0, 0.8);
       width: 100%;
       display: block;
+      height: 60px;
+      max-height: 80px;
     }
     .input-controls {
       display: flex;
@@ -557,4 +623,15 @@
       display: none;
       z-index: 10000;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+    }
+    body {
+      padding-bottom: 320px;
+    }
+
+    body.bottom-mini {
+      padding-bottom: 210px;
+    }
+
+    body.bottom-collapsed {
+      padding-bottom: 140px;
     }
