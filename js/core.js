@@ -60,6 +60,7 @@ import {createLayoutManager} from "./layout.js";
     let masterLockedFromJSON = false;
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let isMobileView = false;
 
     let raceType = 'lapped';
     let detectedRaceType = 'lapped';
@@ -105,9 +106,12 @@ import {createLayoutManager} from "./layout.js";
     const legend = document.getElementById("legend");
     const cardsMiniBtn = document.getElementById("cardsMiniBtn");
     const playbackMiniBtn = document.getElementById("playbackMiniBtn");
+    const exportSessionBtn = document.getElementById("exportSessionBtn");
+    const saveTrackPngBtn = document.getElementById("saveTrackPngBtn");
     const trackCanvas = document.getElementById("track");
     const trackCtx = trackCanvas.getContext("2d");
     const raceTypeInfo = document.getElementById("raceTypeInfo");
+    const resultsBar = document.getElementById("resultsBar");
     const showSectorsEl = document.getElementById("showSectors");
     const showTrackSectorsEl = document.getElementById("showTrackSectors");
     const showDeltasEl = document.getElementById("showDeltas");
@@ -216,6 +220,15 @@ import {createLayoutManager} from "./layout.js";
 
     if (miniModeBtn) {
       miniModeBtn.style.display = "none";
+    }
+
+    function updateMobileFlag() {
+      const wasMobile = isMobileView;
+      isMobileView = window.innerWidth < 820;
+      document.body.classList.toggle("mobile", isMobileView);
+      if (isMobileView !== wasMobile) {
+        autoCollapseCards();
+      }
     }
 
     if (cardsMiniBtn) {
@@ -436,6 +449,16 @@ import {createLayoutManager} from "./layout.js";
       if (!csvInput.files.length) return alert("Choose CSV files first");
       startLoad([...csvInput.files].slice(0, 8));
     };
+    if (exportSessionBtn) {
+      exportSessionBtn.addEventListener("click", () => {
+        exportSessionJSON();
+      });
+    }
+    if (saveTrackPngBtn) {
+      saveTrackPngBtn.addEventListener("click", () => {
+        saveTrackPNG();
+      });
+    }
 
     function startLoad(files) {
       playbackController.pause();
@@ -480,6 +503,7 @@ import {createLayoutManager} from "./layout.js";
         drawEventTimeline();
         drawDeltaTimeline();
         drawInputTimeline();
+        computeResults();
         resizeLayout();
       }).catch(err => alert("File load error: " + err));
     }
@@ -779,10 +803,78 @@ import {createLayoutManager} from "./layout.js";
 
     function createDashboards() {
       createDashboardsUI({cars, dashContainer, miniMode});
+      autoCollapseCards();
     }
 
     function updateLegend() {
       updateLegendUI({legendEl: legend, cars});
+    }
+
+    function autoCollapseCards() {
+      if (!isMobileView) return;
+      dashContainer.querySelectorAll(".dash").forEach(card => {
+        card.classList.add("collapsed");
+        const btn = card.querySelector(".collapseBtn");
+        if (btn) btn.textContent = "►";
+      });
+    }
+
+    function computeResults() {
+      if (!resultsBar) return;
+      if (!cars.length) {resultsBar.innerHTML = ""; return;}
+      const maxDist = Math.max(...cars.map(c => c.totalDist || 0, 0));
+      const list = cars.map(c => {
+        const dist = c.totalDist || 0;
+        const duration = c.durationMs || carDurationMs(c) || 0;
+        return {car: c, dist, duration};
+      });
+
+      // Determine winner by best distance, then shortest duration.
+      list.sort((a, b) => {
+        if (a.dist !== b.dist) return b.dist - a.dist;
+        return a.duration - b.duration;
+      });
+      const winner = list[0];
+      const winTime = winner ? winner.duration : null;
+      const winDist = winner ? winner.dist : 0;
+
+      // Mark finish/position; DNF if beyond 30s of winner or short on distance.
+      list.forEach(item => {
+        const withinDist = (winDist > 0) ? (item.dist >= winDist * 0.9) : true;
+        const withinTime = (winTime != null) ? (item.duration <= winTime + 30000) : true;
+        item.finished = withinDist && withinTime;
+      });
+
+      let pos = 1;
+      list.sort((a, b) => {
+        if (a.finished !== b.finished) return a.finished ? -1 : 1;
+        if (a.finished && b.finished) return a.duration - b.duration;
+        return b.dist - a.dist;
+      });
+
+      list.forEach(item => {
+        if (item.finished) item.position = pos++;
+        const gapMs = (item.finished && winTime != null) ? (item.duration - winTime) : null;
+        item.car.result = {
+          status: item.finished ? "finished" : "dnf",
+          position: item.position || null,
+          gapMs,
+          durationMs: item.duration,
+          totalDist: item.dist
+        };
+      });
+
+      const html = list.map(item => {
+        const c = item.car;
+        const posLabel = item.finished ? `P${item.position}` : "DNF";
+        const gapText = item.finished
+          ? (item.position === 1 ? "Winner" : `+${formatMs(item.car.result.gapMs)}`)
+          : `${Math.round((item.dist / Math.max(1, winDist)) * 100)}% dist`;
+        const timeText = formatMs(item.duration);
+        const cls = item.finished ? "resultChip" : "resultChip dnf";
+        return `<span class="${cls}"><span style="color:${c.color};">●</span> ${posLabel} • ${c.name} • ${timeText} • ${gapText}</span>`;
+      }).join("");
+      resultsBar.innerHTML = html;
     }
 
     function setupScrubber() {
@@ -863,6 +955,8 @@ import {createLayoutManager} from "./layout.js";
     });
 
     attachLensHandlers(trackCanvas, lensState);
+    updateMobileFlag();
+    window.addEventListener("resize", updateMobileFlag);
 
     if (playbackCollapseBtn) {
       playbackCollapseBtn.addEventListener("click", () => {
@@ -1174,6 +1268,43 @@ import {createLayoutManager} from "./layout.js";
         samples: SAMPLES,
         computeLapAnalysisForCar
       });
+    }
+
+    function exportSessionJSON() {
+      if (!cars.length) return alert("Load data first");
+      const payload = {
+        raceType,
+        detectedRaceType,
+        masterTrack: masterTrack.map(p => ({
+          x: p.x, y: p.y, dist: p.dist,
+          confidence: p.confidence, support: p.support, supportTotal: p.supportTotal
+        })),
+        cars: cars.map(c => ({
+          name: c.name,
+          color: c.color,
+          totalDist: c.totalDist,
+          durationMs: c.durationMs || carDurationMs(c),
+          lapStarts: c.lapStarts,
+          events: c.events,
+          result: c.result
+        }))
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "session_export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function saveTrackPNG() {
+      if (!trackCanvas) return;
+      const url = trackCanvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "track.png";
+      a.click();
     }
 
     function updateAllDeltaModels() {

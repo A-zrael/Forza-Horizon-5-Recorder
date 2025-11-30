@@ -168,6 +168,27 @@
       color: var(--text-soft);
     }
 
+    #resultsBar {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--text-main);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .resultChip {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #262A2E, #1D2023);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      font-size: 12px;
+    }
+    .resultChip.dnf {
+      color: #ff5566;
+      border-color: #ff5566aa;
+    }
+
     #raceTypeInfo b {
       color: var(--accent-strong);
     }
