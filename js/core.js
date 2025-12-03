@@ -37,6 +37,7 @@ import {createLayoutManager} from "./layout.js";
     const LAP_MIN_SPEED_DEFAULT = 8;
     const MIN_LAP_SAMPLES_DEFAULT = 300;
     const MIN_LAP_DISTANCE_DEFAULT = 1000; // meters
+    let expectedLapCount = 0; // 0 = auto detect
     let lapRadius = LAP_RADIUS_DEFAULT;
     let lapMinSpeed = LAP_MIN_SPEED_DEFAULT;
     let minLapSamples = MIN_LAP_SAMPLES_DEFAULT;
@@ -156,6 +157,7 @@ import {createLayoutManager} from "./layout.js";
     const lapMinSpeedInput = document.getElementById("lapMinSpeedInput");
     const minLapSamplesInput = document.getElementById("minLapSamplesInput");
     const minLapDistanceInput = document.getElementById("minLapDistanceInput");
+    const expectedLapCountInput = document.getElementById("expectedLapCountInput");
     const applyLapDetectBtn = document.getElementById("applyLapDetectBtn");
 
     const playBtn = document.getElementById("playBtn");
@@ -216,6 +218,7 @@ import {createLayoutManager} from "./layout.js";
       if (lapMinSpeedInput) lapMinSpeedInput.value = lapMinSpeed;
       if (minLapSamplesInput) minLapSamplesInput.value = minLapSamples;
       if (minLapDistanceInput) minLapDistanceInput.value = minLapDistance;
+      if (expectedLapCountInput) expectedLapCountInput.value = expectedLapCount || "";
     }
     const carDurationMs = (car) => {
       if (!car || !car.data || !car.data.length) return 0;
@@ -464,10 +467,12 @@ import {createLayoutManager} from "./layout.js";
         const s = parseFloat(lapMinSpeedInput?.value);
         const m = parseInt(minLapSamplesInput?.value, 10);
         const d = parseFloat(minLapDistanceInput?.value);
+        const elaps = parseInt(expectedLapCountInput?.value, 10);
         lapRadius = Number.isFinite(r) && r > 0 ? r : LAP_RADIUS_DEFAULT;
         lapMinSpeed = Number.isFinite(s) && s >= 0 ? s : LAP_MIN_SPEED_DEFAULT;
         minLapSamples = Number.isFinite(m) && m > 0 ? m : MIN_LAP_SAMPLES_DEFAULT;
         minLapDistance = Number.isFinite(d) && d > 0 ? d : MIN_LAP_DISTANCE_DEFAULT;
+        expectedLapCount = Number.isFinite(elaps) && elaps > 0 ? elaps : 0;
         detectLapsForAll();
         rebuildAll();
       });
@@ -594,29 +599,46 @@ import {createLayoutManager} from "./layout.js";
         const d = car.data;
         if (!d.length) {car.lapStarts = [0]; return;}
         const startX = d[0].pos_x;
-      const startY = d[0].pos_y;
-      const laps = [0];
-      let lastIdx = 0;
+        const startY = d[0].pos_y;
+        const laps = [0];
+        let lastIdx = 0;
 
-      for (let i = 1; i < d.length; i++) {
-        const dx = d[i].pos_x - startX;
-        const dy = d[i].pos_y - startY;
-        const dist0 = Math.hypot(dx, dy);
-        const speed = d[i].speed_mps || (d[i].speed_kph / 3.6) || (d[i].speed_mph / 2.23694) || 0;
-        const distSinceLast = d[i].dist - d[lastIdx].dist;
-        if (
-          dist0 < lapRadius &&
-          speed > lapMinSpeed &&
-          (i - lastIdx) > minLapSamples &&
-          distSinceLast > minLapDistance
-        ) {
-          laps.push(i);
-          lastIdx = i;
+        for (let i = 1; i < d.length; i++) {
+          const dx = d[i].pos_x - startX;
+          const dy = d[i].pos_y - startY;
+          const dist0 = Math.hypot(dx, dy);
+          const speed = d[i].speed_mps || (d[i].speed_kph / 3.6) || (d[i].speed_mph / 2.23694) || 0;
+          const distSinceLast = d[i].dist - d[lastIdx].dist;
+          if (
+            dist0 < lapRadius &&
+            speed > lapMinSpeed &&
+            (i - lastIdx) > minLapSamples &&
+            distSinceLast > minLapDistance
+          ) {
+            laps.push(i);
+            lastIdx = i;
+          }
         }
-      }
-      car.lapStarts = laps;
-        if (laps.length > 1) {
-          car.lapLen = d[laps[1]].dist - d[laps[0]].dist;
+        if (expectedLapCount >= 2) {
+          const targetLaps = expectedLapCount;
+          const totalDist = d[d.length - 1].dist || 0;
+          const segLen = totalDist / targetLaps;
+          const forced = [0];
+          for (let k = 1; k < targetLaps; k++) {
+            const targetDist = segLen * k;
+            let lo = 0, hi = d.length - 1;
+            while (lo < hi) {
+              const mid = (lo + hi) >> 1;
+              if (d[mid].dist < targetDist) lo = mid + 1; else hi = mid;
+            }
+            forced.push(lo);
+          }
+          car.lapStarts = forced;
+        } else {
+          car.lapStarts = laps;
+        }
+        if (car.lapStarts.length > 1) {
+          car.lapLen = d[car.lapStarts[1]].dist - d[car.lapStarts[0]].dist;
         } else {
           car.lapLen = (d[d.length - 1].dist - d[0].dist) || 1;
         }
