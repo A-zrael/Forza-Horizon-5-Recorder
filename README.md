@@ -1,39 +1,47 @@
 ![](https://github.com/A-zrael/Forza-Horizon-5-Recorder/blob/main/Telemetry%20Recorder%20Icon.jpeg?raw=true)
-# ForzaHorizon5 Telemetry Recorder
-Forza Horizon 5 PS5 data recorder with an in-browser race analyzer (track map, deltas, inputs, events).
+
+# Forza Horizon 5 Telemetry Recorder (Go)
+
+Lightweight Go UDP listener that records Forza Horizon 5 “Data Out” telemetry to per-car CSV files. Supports multiple simultaneous senders by listening on a configurable list or range of ports.
+
+## Prerequisites
+
+- Go toolchain (go.mod targets 1.25.4).
+- Forza Horizon 5 with “Data Out” enabled and pointed to the machine running this app. Use a unique port per console/PC if multiple cars are recording at once.
 
 ## Quick start
-1) Record a session:
+
 ```bash
-cd Go_Forza_Rec/bin
-./forza_recorder_v1   # writes a telemetry CSV for each run
+# Run directly (default ports 5030-5040)
+go run .
+
+# Custom ports (comma list or inclusive range)
+go run . -ports 3050,3051
+go run . -ports 3050-3040
 ```
-2) Launch the viewer:
+
+### Build a binary
+
 ```bash
-cd Race_Viewer   # folder containing index.html
-python3 -m http.server 8000
-# open http://localhost:8000
+go build -o forza_recorder
+./forza_recorder -ports 5030-5040
 ```
-3) Click **Select CSVs → Load CSVs**, pick one or more recordings, and scrub/play.
 
-## Race viewer highlights
-- Multi-car overlay with color legend, per-car dashboard cards, and mini/collapsed modes.
-- Auto lap detection (tunable radius/min speed/sample count/distance/expected laps) for lapped and sprint runs.
-- Master track builder with speed heatmap, confidence tinting, sector coloring, and PNG export; import/export master JSON.
-- Sector analysis: choose 2–6 sectors, per-car sector tables, best-lap vs best-sector delta modes with shading.
-- Event timelines: crashes, collisions, overtakes, fastest laps, and lap starts; unified or per-car timelines plus hover tooltips.
-- Playback bar with play/pause, scrubber, elapsed time readout, and delta/input timelines (throttle, brake, steering toggles).
-- Magnifier lens on the track canvas for zoomed inspection.
-- Session export (JSON) to share a loaded set of CSVs without the raw files.
+## Runtime behavior
 
-## Controls cheat sheet
-- **Setup panel**: toggle with “Show setup ▾”. Cards/playback mini buttons shrink UI for small screens.
-- **Track layer toggles**: track sectors, speed heatmap, confidence shading, sector tables, deltas, sector count, delta mode.
-- **Lap detect**: adjust radius/min speed/min samples/min lap distance/expected laps, then “Apply lap detect”.
-- **Events**: switch Unified/Per-car, toggle Crash/Collision/Overtake/Fastest Lap/Lap Start.
-- **Exports**: “Export session JSON” (current load), “Save track PNG” (canvas), “Export Master JSON”.
+- Opens a UDP listener on each configured port and tags incoming packets with the port as the car ID.
+- Waits until every seen car reports `IsRaceOn == true`, then begins recording.
+- Writes one CSV per car in the working directory named `Car-<port>.csv`.
+- Stops once all cars send a packet with `IsRaceOn == false`, then exports the files.
 
-## Recorder notes
-- The Go recorder binary lives in `Go_Forza_Rec/bin/forza_recorder_v1` and emits CSV telemetry the viewer consumes.
-- CSVs should include `timestampMS` (or `timestamp`), speed (`speed_mps`/`speed_mph`/`speed_kph`), accel_x, engine RPM/gear if available.
-- Drop multiple CSVs to compare cars in one view; the viewer rebuilds the master track automatically unless a master JSON is loaded.
+## CLI flags
+
+- `-ports` (string): Comma-separated list or inclusive range (`start-end`) of UDP ports to listen on. Default: `5030-5040`.
+
+## Output schema
+
+CSV headers match the fields in `models.Carstate` (timestamp, RPMs, acceleration/velocity, suspension, tire slip/temps, position, speed, lap info, controls, etc.). See `models/models.go` for the full column list.
+
+## Race viewer
+
+The original in-browser race viewer is no longer part of this repo. If you want visualization/analysis, use the separate viewer project (not included here) or import the generated CSVs into your own tooling (Excel, pandas, etc.).

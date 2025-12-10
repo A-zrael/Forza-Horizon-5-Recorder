@@ -1,22 +1,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"forza/models"
 	"forza/parser"
 	"forza/recorder"
+	"log"
+	"strconv"
+	"strings"
 )
 
 func main() {
 
 	fmt.Println("Starting multi-car recorder")
 
+	portFlag := flag.String("ports", "5030-5040", "Comma-separated list or inclusive range (start-end) of UDP ports to listen on")
+	flag.Parse()
+
+	ports, err := parsePorts(*portFlag)
+	if err != nil {
+		log.Fatalf("invalid -ports value %q: %v", *portFlag, err)
+	}
+
 	// Shared packet channel
 	packetStream := make(chan recorder.RawPacket, 1000)
 	recordingStarted := false
-
-	// Launch recorders on ports 5030–5040
-	ports := []string{"5030", "5031", "5032", "5033", "5034", "5035", "5036", "5037", "5038", "5039", "5040"}
 
 	for _, port := range ports {
 		err := recorder.Listen(port, packetStream)
@@ -144,4 +153,63 @@ func countReady(ready map[string]bool) (int, int) {
 		}
 	}
 	return count, total
+}
+
+func parsePorts(input string) ([]string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, fmt.Errorf("ports string cannot be empty")
+	}
+
+	// Range form: "start-end"
+	if strings.Contains(input, "-") && !strings.Contains(input, ",") {
+		parts := strings.Split(input, "-")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("range must be start-end")
+		}
+
+		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return nil, fmt.Errorf("invalid start port: %w", err)
+		}
+		end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil {
+			return nil, fmt.Errorf("invalid end port: %w", err)
+		}
+
+		step := 1
+		if start > end {
+			step = -1
+		}
+
+		var ports []string
+		for p := start; ; p += step {
+			if p < 1 || p > 65535 {
+				return nil, fmt.Errorf("port %d out of range", p)
+			}
+			ports = append(ports, strconv.Itoa(p))
+			if p == end {
+				break
+			}
+		}
+		return ports, nil
+	}
+
+	// Comma-separated list
+	var ports []string
+	for _, part := range strings.Split(input, ",") {
+		val := strings.TrimSpace(part)
+		if val == "" {
+			return nil, fmt.Errorf("empty port entry in list")
+		}
+		p, err := strconv.Atoi(val)
+		if err != nil {
+			return nil, fmt.Errorf("invalid port %q: %w", val, err)
+		}
+		if p < 1 || p > 65535 {
+			return nil, fmt.Errorf("port %d out of range", p)
+		}
+		ports = append(ports, strconv.Itoa(p))
+	}
+	return ports, nil
 }
